@@ -25,7 +25,9 @@ const client = new Client({
 // ================= [ Configuration / الإعدادات ] =================
 
 const BAN_ROLE_ID = "1516616022352859278"; 
-const SUGGESTION_CHANNEL_ID = "1516999923470565516"; 
+const SUGGESTION_HUB_CHANNEL_ID = "1516999923470565516"; // روم اللوحة العامة للأعضاء
+const ADMIN_LOG_CHANNEL_ID = "1515161056975126705"; // روم الموديراتورز والأدمنز السرية
+
 const BRAND_COLOR = "#FF750D"; 
 const BAN_TRACKER = new Set(); 
 
@@ -84,17 +86,19 @@ client.on("interactionCreate", async (interaction) => {
       return interaction.reply({ content: "❌ You don't have permission to use this.", ephemeral: true });
     }
 
-    // بناء لوحة التحكم بالنص المخصص والفوتر والتاريخ المطلوب
+    const hubChannel = interaction.guild.channels.cache.get(SUGGESTION_HUB_CHANNEL_ID);
+    if (!hubChannel) return interaction.reply({ content: "Error: Suggestion Hub channel not found in configuration.", ephemeral: true });
+
     const panelEmbed = new EmbedBuilder()
       .setColor(BRAND_COLOR)
-      .setTitle("🔱 ─── PROJECT YONKO : SUGGESTIONS ─── 🔱")
+      .setTitle("🔱 ─── SERVER SUGGESTION HUB ─── 🔱")
       .setDescription(
         "Welcome!\n\n" +
         "We're happy to have you here. Click the button below to submit your suggestion, and it will be sent directly to the administration team for review.\n\n" +
         "Thank you for helping us improve the server!"
       )
       .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517130067468226580/Picsart_26-06-18_12-33-02-521.jpg?ex=6a3528fa&is=6a33d77a&hm=c403f14ed0baf033fa2290485a178f555a5ffba8376e9dc2a0ec670bb659656a")
-      .setTimestamp() // لإظهار التاريخ والوقت المتغير ديناميكياً
+      .setTimestamp() 
       .setFooter({ 
         text: "YONKO TEAM • Suggestions Panel", 
         iconURL: interaction.guild.iconURL() 
@@ -108,15 +112,15 @@ client.on("interactionCreate", async (interaction) => {
         .setEmoji("💡")
     );
 
-    await interaction.reply({ content: "Panel deployed successfully.", ephemeral: true });
-    return interaction.channel.send({ embeds: [panelEmbed], components: [row] });
+    await interaction.reply({ content: "🧑🏻‍💻 Panel deployed successfully.", ephemeral: true });
+    return hubChannel.send({ embeds: [panelEmbed], components: [row] });
   }
 
   // 2. فتح النافذة المنبثقة عند ضغط الزر
   if (interaction.isButton() && interaction.customId === "open_suggestion_modal") {
     const modal = new ModalBuilder()
       .setCustomId("suggestion_modal")
-      .setTitle("Submit Your Suggestion");
+      .setTitle("🧑🏻‍💻 Submit Your Suggestion");
 
     const textInput = new TextInputBuilder()
       .setCustomId("suggestion_input")
@@ -130,39 +134,41 @@ client.on("interactionCreate", async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  // 3. استقبال ومعالجة البيانات من النافذة المنبثقة
+  // 3. استقبال ومعالجة البيانات وإرسالها لروم المودز والأدمنز
   if (interaction.isModalSubmit() && interaction.customId === "suggestion_modal") {
     const suggestionText = interaction.fields.getTextInputValue("suggestion_input");
-    const channel = interaction.guild.channels.cache.get(SUGGESTION_CHANNEL_ID);
+    const adminChannel = interaction.guild.channels.cache.get(ADMIN_LOG_CHANNEL_ID);
 
-    if (!channel) return interaction.reply({ content: "Error: Suggestion channel not found.", ephemeral: true });
+    if (!adminChannel) return interaction.reply({ content: "Error: Admin log channel not found. Please check setup.", ephemeral: true });
 
     try {
       const embed = new EmbedBuilder()
         .setColor(BRAND_COLOR)
         .setAuthor({ name: `NEW PROPOSAL | ID: #${Math.floor(1000 + Math.random() * 9000)}`, iconURL: interaction.guild.iconURL() })
-        .setTitle("🔱 ─── PROJECT YONKO : EVOLUTION ─── 🔱")
-        .setDescription(`\n**◈ COMMUNITY SUGGESTION:**\n\`\`\`fix\n${suggestionText}\`\`\`\n`)
+        .setTitle("🔱 ─── SERVER SUGGESTION HUB ─── 🔱")
+        .setDescription(`\n**🧑🏻‍💻 | COMMUNITY SUGGESTION:**\n\`\`\`fix\n${suggestionText}\`\`\`\n`)
         .addFields(
           { name: "📡 | SUGGESTED BY", value: `> ${interaction.user}`, inline: true },
           { name: "🛡️ | STATUS", value: `> \`PENDING REVIEW\``, inline: true }
         )
-        .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517130067468226580/Picsart_26-06-18_12-33-02-521.jpg?ex=6a3528fa&is=6a33d77a&hm=c403f14ed0baf033fa2290485a178f555a5ffba8376e9dc2a0ec670bb659656a")
+        // الصورة الجديدة المخصصة لرسالة الإدارة والمودز
+        .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517141518744293396/Picsart_26-06-18_13-16-11-070.jpg?ex=6a3533a5&is=6a33e225&hm=8455641086dca5a3ce07de377ef9d5aceebef98c3701521a5c8667e5731ac983&")
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
         .setTimestamp()
-        .setFooter({ text: `© YONKO TEAM | Community Input`, iconURL: interaction.guild.iconURL() });
+        .setFooter({ text: `© YONKO TEAM | Staff Review Panel`, iconURL: interaction.guild.iconURL() });
 
-      const message = await channel.send({ embeds: [embed] });
+      const message = await adminChannel.send({ content: "🔔 **New suggestion received for administration review:**", embeds: [embed] });
       await message.react("✨"); 
       await message.react("🌑"); 
 
-      return interaction.reply({ content: "💥 **Boom! Your suggestion has been sent. Thanks for helping us grow!**", ephemeral: true });
+      // تظهر للعضو الذي ضغط الزر فقط بشكل مخفي تماماً (Ephemeral)
+      return interaction.reply({ content: "💥 **Boom! Your suggestion has been sent straight to the administration team. Thanks for helping us grow!**", ephemeral: true });
     } catch (error) {
       console.error(error);
-      return interaction.reply({ content: "Protocol Failure: Error posting suggestion.", ephemeral: true });
+      return interaction.reply({ content: "Protocol Failure: Error posting suggestion to admin log.", ephemeral: true });
     }
   }
 });
 
 client.login(process.env.TOKEN);
-    
+        
