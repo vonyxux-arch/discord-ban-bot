@@ -12,7 +12,9 @@ const {
   ButtonStyle, 
   ModalBuilder, 
   TextInputBuilder, 
-  TextInputStyle 
+  TextInputStyle,
+  AuditLogEvent,
+  AttachmentBuilder // تم إضافتها لإرفاق الصورة المحلية
 } = require("discord.js");
 
 const client = new Client({
@@ -20,7 +22,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration 
   ]
 });
 
@@ -33,11 +36,15 @@ const SUGGESTION_HUB_CHANNEL_ID = "1516999923470565516";
 const ADMIN_LOG_CHANNEL_ID = "1515161056975126705"; 
 
 // قنوات البلاغات
-const REPORT_LOG_CHANNEL_ID = "1515161056975126705"; // روم الإدارة السرية لاستقبال البلاغات
+const REPORT_LOG_CHANNEL_ID = "1515161056975126705"; 
 
-const BRAND_COLOR = "#FF750D"; 
+const BRAND_COLOR = "#FF750D"; // الحفاظ على اللون البرتقالي الجانبي المعتمد
 const BAN_TRACKER = new Set(); 
-const REPORT_COOLDOWN = new Map(); // حماية ضد السبام (5 دقائق لكل مستخدم)
+const REPORT_COOLDOWN = new Map(); 
+
+// 🚫 أيدي البوتات المستثناة من إرسال رسائل الخاص
+const EXCLUDED_BOT_1_ID = "678344927997853742"; 
+const EXCLUDED_BOT_2_ID = "1516839005314875482"; 
 
 // ================= [ Registration / تسجيل الأنظمة والأوامر ] =================
 
@@ -46,7 +53,7 @@ const commands = [
     .setName("setup-suggestion")
     .setDescription("Deploy the suggestion panel button (Admin Only)."),
   new ContextMenuCommandBuilder()
-    .setName("🚨 REPORT TO 4KO")
+    .setName("🚨 REPORT TO YONKO")
     .setType(ApplicationCommandType.User)
 ].map(command => command.toJSON());
 
@@ -59,7 +66,7 @@ client.once("ready", async () => {
   } catch (error) { console.error(error); }
 });
 
-// ================= [ Anti-Leave Bypass Protocol / نظام حظر الهاربين ] =================
+// ================= [ Anti-Leave Bypass Protocol ] =================
 
 client.on("guildMemberUpdate", async (oldMember, newMember) => {
   if (!oldMember.roles.cache.has(BAN_ROLE_ID) && newMember.roles.cache.has(BAN_ROLE_ID)) {
@@ -85,7 +92,7 @@ client.on("guildMemberAdd", async (member) => {
   }
 });
 
-// ================= [ Core Interaction Handling / المعالجة الذكية ] =================
+// ================= [ Core Interaction Handling ] =================
 
 client.on("interactionCreate", async (interaction) => {
   
@@ -108,12 +115,12 @@ client.on("interactionCreate", async (interaction) => {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("open_suggestion_modal").setLabel("Submit Suggestion").setStyle(ButtonStyle.Primary).setEmoji("💡")
     );
-    await interaction.reply({ content: "🧑🏻‍💻 Panel deployed successfully.", ephemeral: true });
+    await interaction.reply({ content: "🧑形💻 Panel deployed successfully.", ephemeral: true });
     return hubChannel.send({ embeds: [panelEmbed], components: [row] });
   }
 
   if (interaction.isButton() && interaction.customId === "open_suggestion_modal") {
-    const modal = new ModalBuilder().setCustomId("suggestion_modal").setTitle("🧑🏻‍💻 Submit Your Suggestion");
+    const modal = new ModalBuilder().setCustomId("suggestion_modal").setTitle("🧑形💻 Submit Your Suggestion");
     const textInput = new TextInputBuilder().setCustomId("suggestion_input").setLabel("What is your suggestion?").setStyle(TextInputStyle.Paragraph).setRequired(true);
     modal.addComponents(new ActionRowBuilder().addComponents(textInput));
     return interaction.showModal(modal);
@@ -129,7 +136,7 @@ client.on("interactionCreate", async (interaction) => {
         .setColor(BRAND_COLOR)
         .setAuthor({ name: `NEW PROPOSAL | ID: #${Math.floor(1000 + Math.random() * 9000)}`, iconURL: interaction.guild.iconURL() })
         .setTitle("🔱 ─── SERVER SUGGESTION HUB ─── 🔱")
-        .setDescription(`\n**🧑🏻‍💻 | COMMUNITY SUGGESTION:**\n\`\`\`fix\n${suggestionText}\`\`\`\n`)
+        .setDescription(`\n**🧑形💻 | COMMUNITY SUGGESTION:**\n\`\`\`fix\n${suggestionText}\`\`\`\n`)
         .addFields({ name: "📡 | SUGGESTED BY", value: `> ${interaction.user}`, inline: true }, { name: "🛡️ | STATUS", value: `> \`PENDING REVIEW\``, inline: true })
         .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517141518744293396/Picsart_26-06-18_13-16-11-070.jpg?ex=6a3533a5&is=6a33e225&hm=8455641086dca5a3ce07de377ef9d5aceebef98c3701521a5c8667e5731ac983&")
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
@@ -142,9 +149,9 @@ client.on("interactionCreate", async (interaction) => {
     } catch (error) { console.error(error); return interaction.reply({ content: "Failure posting suggestion.", ephemeral: true }); }
   }
 
-  // ---------------- [ SECTION 2: USER CONTEXT MENU REPORT (الضغط المطول) ] ----------------
+  // ---------------- [ SECTION 2: USER CONTEXT MENU REPORT ] ----------------
   
-  if (interaction.isUserContextMenuCommand() && interaction.commandName === "🚨 REPORT TO 4KO") {
+  if (interaction.isUserContextMenuCommand() && interaction.commandName === "🚨 REPORT TO YONKO") {
     const lastReport = REPORT_COOLDOWN.get(interaction.user.id);
     if (lastReport && (Date.now() - lastReport < 300000)) { 
       const timeLeft = Math.ceil((300000 - (Date.now() - lastReport)) / 1000);
@@ -189,7 +196,6 @@ client.on("interactionCreate", async (interaction) => {
     try {
       REPORT_COOLDOWN.set(interaction.user.id, Date.now()); 
 
-      // أولاً: تم تعديل هذه الصورة لتصبح الصورة الصحيحة التي طلبتها للادمنز عند وصول بلاغ جديد
       const reportEmbed = new EmbedBuilder()
         .setColor("#D92121")
         .setAuthor({ name: `INCIDENT SYSTEM | CASE ID: #${Math.floor(10000 + Math.random() * 90000)}`, iconURL: interaction.guild.iconURL() })
@@ -203,9 +209,8 @@ client.on("interactionCreate", async (interaction) => {
         .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154886574280915/Picsart_26-06-16_01-44-54-864.jpg?ex=6a354018&is=6a33ee98&hm=696c86e053ba1c3d80dd4d86317b526e9a5b4add0e09d628b369dbe9ab159cec&")
         .setThumbnail(targetUser ? targetUser.displayAvatarURL({ dynamic: true }) : null)
         .setTimestamp()
-        .setFooter({ text: "4KO TEAM • Anti-Cheat & Security", iconURL: interaction.guild.iconURL() });
+        .setFooter({ text: "YONKO TEAM • Anti-Cheat & Security", iconURL: interaction.guild.iconURL() });
 
-      // ثانياً: إضافة إيموجي ❌ لزر الرفض كما طلبت
       const actionRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`report_accept_${interaction.user.id}`).setLabel("Accept Report").setStyle(ButtonStyle.Success).setEmoji("✅"),
         new ButtonBuilder().setCustomId(`report_reject_${interaction.user.id}`).setLabel("Reject Report").setStyle(ButtonStyle.Danger).setEmoji("❌"),
@@ -221,7 +226,7 @@ client.on("interactionCreate", async (interaction) => {
   
   if (interaction.isButton() && interaction.customId.startsWith("report_")) {
     if (!interaction.member.permissions.has("ManageMessages")) { 
-      return interaction.reply({ content: "❌ Authorized staff clearance required to trigger status actions.", ephemeral: true });
+      return interaction.reply({ content: "❌ Authorized staff clearance required.", ephemeral: true });
     }
 
     const parts = interaction.customId.split("_");
@@ -231,7 +236,6 @@ client.on("interactionCreate", async (interaction) => {
 
     const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
 
-    // ثالثاً: تغيير العناوين وتغيير الرسائل في الخاص لتكون بالإنجليزية بالكامل
     if (action === "accept") {
       originalEmbed.setColor("#2ecc71").addFields({ name: "⚡ ACTION LOGGED", value: `> Accepted by ${interaction.user}`, inline: true });
       await interaction.message.edit({ embeds: [originalEmbed], components: [] }); 
@@ -240,14 +244,14 @@ client.on("interactionCreate", async (interaction) => {
         try {
           const acceptEmbed = new EmbedBuilder()
             .setColor("#2ecc71")
-            .setTitle("4KO SECURITY SYSTEM")
+            .setTitle("YONKO SECURITY SYSTEM")
             .setDescription("Hello,\n\nYour recent user report has been thoroughly reviewed and approved by our moderation team. The provided evidence was validated, and appropriate disciplinary actions have been applied to the offender.\n\nThank you for keeping our community safe and clean!")
             .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154885513117918/Picsart_26-06-16_02-06-37-305.jpg?ex=6a354018&is=6a33ee98&hm=65126cf82239cd1a7c36117b147641c2b86f043226bd0d9b3dd5c26e4b109b34&")
             .setTimestamp();
           await reporter.send({ embeds: [acceptEmbed] });
-        } catch (e) { console.log(`Could not DM user ${reporterId} - DMs locked.`); }
+        } catch (e) { console.log(`Could not DM user.`); }
       }
-      return interaction.reply({ content: "✅ Report marked as Accepted, user notified.", ephemeral: true });
+      return interaction.reply({ content: "✅ Report marked as Accepted.", ephemeral: true });
     }
 
     if (action === "reject") {
@@ -258,23 +262,71 @@ client.on("interactionCreate", async (interaction) => {
         try {
           const rejectEmbed = new EmbedBuilder()
             .setColor("#e74c3c")
-            .setTitle("4KO SECURITY SYSTEM")
+            .setTitle("YONKO SECURITY SYSTEM")
             .setDescription("Hello,\n\nWe are contacting you to inform you that your recent user report has been reviewed and subsequently rejected. Following a careful inspection, our staff found insufficient or inconclusive evidence to verify the claimed rule violation.\n\nThank you for your understanding.")
             .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154886041469008/Picsart_26-06-16_02-28-32-263.jpg?ex=6a354018&is=6a33ee98&hm=0be0e571c90ec7b47c203d8a83a11d3a493b88a3210c73229665c037b3160831&")
             .setTimestamp();
           await reporter.send({ embeds: [rejectEmbed] });
-        } catch (e) { console.log(`Could not DM user ${reporterId} - DMs locked.`); }
+        } catch (e) { console.log(`Could not DM user.`); }
       }
-      return interaction.reply({ content: "❌ Report marked as Rejected, user notified via DM.", ephemeral: true });
+      return interaction.reply({ content: "❌ Report marked as Rejected.", ephemeral: true });
     }
 
     if (action === "archive") {
       originalEmbed.setColor("#34495e").addFields({ name: "⚡ ACTION LOGGED", value: `> Archived & Closed by ${interaction.user}`, inline: true });
       await interaction.message.edit({ embeds: [originalEmbed], components: [] });
-      return interaction.reply({ content: "🗂️ Case archived and locked successfully.", ephemeral: true });
+      return interaction.reply({ content: "🗂️ Case archived.", ephemeral: true });
     }
   }
 });
 
+// ================= [ SECTION 5: AUTOMATED DM ON BAN PROTOCOL ] =================
+
+client.on("guildBanAdd", async (ban) => {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  try {
+    const fetchedLogs = await ban.guild.fetchAuditLogs({
+      limit: 1,
+      type: AuditLogEvent.GuildBanAdd,
+    }).catch(() => null);
+
+    if (!fetchedLogs) return;
+    const banLog = fetchedLogs.entries.first();
+    if (!banLog) return;
+
+    const { executor, reason } = banLog;
+
+    // تخطي البوتين المستثنيين
+    if (executor.id === EXCLUDED_BOT_1_ID || executor.id === EXCLUDED_BOT_2_ID) {
+      console.log(`[BAN EXCLUSION] Ban by excluded bot (${executor.tag}) ignored.`);
+      return;
+    }
+
+    // 🖼️ إعداد ملف الصورة المرفق 590606.jpg
+    const file = new AttachmentBuilder("./590606.jpg");
+
+    const dmBanEmbed = new EmbedBuilder()
+      .setColor(BRAND_COLOR) // الحفاظ على نفس اللون البرتقالي
+      .setTitle("🎮 GAME OVER | WASTED")
+      .setDescription(`Well, looks like you either broke one of our strict rules or simply managed to trigger an angry moderator. Either way... you are officially banned from **YONKO Server**.\n\nNext time, try not to test the staff's patience. Good luck out there!`)
+      .addFields(
+        { name: "🔨 Banned By", value: `\`${executor.tag}\``, inline: true },
+        { name: "📝 Given Reason", value: `\`\`\`fix\n${reason || "Caught red-handed!"}\n\`\`\``, inline: false }
+      )
+      .setImage("attachment://590606.jpg") // ربط الصورة المرفقة بالـ Embed مباشرة
+      .setTimestamp()
+      .setFooter({ text: "YONKO TEAM Server • Security Enforcement Protocol", iconURL: ban.guild.iconURL() });
+
+    // إرسال الـ Embed ملوّناً ومرفقاً بالصورة المحددة
+    await ban.user.send({ embeds: [dmBanEmbed], files: [file] }).catch(() => {
+      console.log(`[DM FAILURE] Could not send DM to ${ban.user.tag}.`);
+    });
+
+  } catch (error) {
+    console.error("Error running guildBanAdd protocol:", error);
+  }
+});
+
 client.login(process.env.TOKEN);
-        
+      
