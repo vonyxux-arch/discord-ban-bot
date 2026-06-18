@@ -17,24 +17,19 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
   const hadRole = oldMember.roles.cache.has(ROLE_ID);
   const hasRole = newMember.roles.cache.has(ROLE_ID);
 
+  // إذا أخذ الرتبة → BAN فوري
   if (!hadRole && hasRole) {
-    console.log(`${newMember.user.tag} received the role`);
+    console.log(`${newMember.user.tag} got the role → banning`);
 
-    setTimeout(async () => {
-      try {
-        const member = await newMember.guild.members.fetch(newMember.id);
+    try {
+      await newMember.ban({
+        reason: "Received restricted role"
+      });
 
-        if (member.roles.cache.has(ROLE_ID)) {
-          await member.ban({
-            reason: "Received monitored role"
-          });
-
-          console.log(`Banned ${member.user.tag}`);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }, 30000); // 30 ثانية
+      console.log(`Banned ${newMember.user.tag}`);
+    } catch (err) {
+      console.error("Ban failed:", err);
+    }
   }
 });
 
