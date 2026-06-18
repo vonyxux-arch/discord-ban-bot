@@ -151,7 +151,6 @@ client.on("interactionCreate", async (interaction) => {
           { name: "📡 | SUGGESTED BY", value: `> ${interaction.user}`, inline: true },
           { name: "🛡️ | STATUS", value: `> \`PENDING REVIEW\``, inline: true }
         )
-        // الصورة الجديدة المخصصة لرسالة الإدارة والمودز
         .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517141518744293396/Picsart_26-06-18_13-16-11-070.jpg?ex=6a3533a5&is=6a33e225&hm=8455641086dca5a3ce07de377ef9d5aceebef98c3701521a5c8667e5731ac983&")
         .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
         .setTimestamp()
@@ -161,7 +160,6 @@ client.on("interactionCreate", async (interaction) => {
       await message.react("✨"); 
       await message.react("🌑"); 
 
-      // تظهر للعضو الذي ضغط الزر فقط بشكل مخفي تماماً (Ephemeral)
       return interaction.reply({ content: "💥 **Boom! Your suggestion has been sent straight to the administration team. Thanks for helping us grow!**", ephemeral: true });
     } catch (error) {
       console.error(error);
@@ -171,4 +169,3 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 client.login(process.env.TOKEN);
-        
