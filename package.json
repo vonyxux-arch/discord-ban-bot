@@ -1,16 +1,13 @@
 {
-  "name": "yonko-bot",
+  "name": "yonko-security-bot",
   "version": "1.0.0",
-  "description": "YONKO Security & Management Bot",
+  "description": "Security and Suggestion management system for YONKO server",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "dependencies": {
-    "discord.js": "^14.14.0",
-    "axios": "^1.7.0"
+    "discord.js": "^14.14.1",
+    "axios": "^1.6.0"
   }
 }
