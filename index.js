@@ -14,8 +14,9 @@ const {
   TextInputBuilder, 
   TextInputStyle,
   AuditLogEvent,
-  AttachmentBuilder // تم إضافتها لإرفاق الصورة المحلية
+  AttachmentBuilder 
 } = require("discord.js");
+const axios = require('axios'); // مكتبة فحص الصور عبر الـ API
 
 const client = new Client({
   intents: [
@@ -45,6 +46,61 @@ const REPORT_COOLDOWN = new Map();
 // 🚫 أيدي البوتات المستثناة من إرسال رسائل الخاص
 const EXCLUDED_BOT_1_ID = "678344927997853742"; 
 const EXCLUDED_BOT_2_ID = "1516839005314875482"; 
+
+// ================= [ AI MODERATION SYSTEM - نظام فحص الصور ] =================
+
+client.on("messageCreate", async (message) => {
+  // استثناء البوتات، الرسائل بدون مرفقات، والرسائل التي تحتوي على Embeds (مثل رسائل البوت الفنية)
+  if (message.author.bot || !message.guild || message.attachments.size === 0 || message.embeds.length > 0) return;
+
+  const attachment = message.attachments.first();
+  const isImageOrVideo = attachment.contentType?.startsWith('image/') || attachment.contentType?.startsWith('video/');
+  
+  if (!isImageOrVideo) return;
+
+  try {
+    const response = await axios.get('https://api.sightengine.com/1.0/check.json', {
+      params: {
+        'url': attachment.url,
+        'models': 'nudity-2.0,gore', 
+        'api_user': process.env.SIGHT_USER,
+        'api_secret': process.env.SIGHT_SECRET
+      }
+    });
+
+    // تحديد نسبة الفحص (إباحية أكثر من 80% أو عنف ودموية أكثر من 60%)
+    if (response.data.nudity.raw > 0.8 || response.data.gore.raw > 0.6) {
+      await message.delete().catch(() => null);
+      
+      if (message.member && message.member.bannable) {
+        // 1. تطبيق البان التلقائي للمخالف
+        await message.member.ban({ reason: "AI Security: Restricted media content detected." });
+
+        // 2. إرسال رسالة الـ DM المعتمدة للسيرفر (Wasted)
+        const file = new AttachmentBuilder("./590606.jpg");
+        const dmBanEmbed = new EmbedBuilder()
+          .setColor(BRAND_COLOR)
+          .setTitle("🎮 GAME OVER | WASTED")
+          .setDescription(`Well, looks like you either broke one of our strict rules or simply managed to trigger an angry moderator. Either way... you are officially banned from **YONKO Server**.\n\nNext time, try not to test the staff's patience. Good luck out there!`)
+          .addFields(
+            { name: "🔨 Banned By", value: `\`${client.user.tag}\``, inline: true },
+            { name: "📝 Given Reason", value: `\`\`\`fix\nAutomated Security: NSFW/Gore content detected.\n\`\`\``, inline: false }
+          )
+          .setImage("attachment://590606.jpg")
+          .setTimestamp()
+          .setFooter({ text: "YONKO TEAM Server • Security Enforcement Protocol", iconURL: message.guild.iconURL() });
+
+        await message.author.send({ embeds: [dmBanEmbed], files: [file] }).catch(() => {});
+
+        // 3. إرسال تقرير بقناة الأدمن لوقوع المخالفة وحظر المستخدم آلياً
+        const logChannel = message.guild.channels.cache.get(ADMIN_LOG_CHANNEL_ID);
+        if (logChannel) {
+          logChannel.send(`🚨 **Security Enforcement:** User ${message.author.tag} has been banned for sharing restricted media content.`);
+        }
+      }
+    }
+  } catch (error) { console.error("AI Moderation Error:", error); }
+});
 
 // ================= [ Registration / تسجيل الأنظمة والأوامر ] =================
 
@@ -329,4 +385,4 @@ client.on("guildBanAdd", async (ban) => {
 });
 
 client.login(process.env.TOKEN);
-      
+        
