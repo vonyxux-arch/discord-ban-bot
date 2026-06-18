@@ -33,11 +33,11 @@ const SUGGESTION_HUB_CHANNEL_ID = "1516999923470565516";
 const ADMIN_LOG_CHANNEL_ID = "1515161056975126705"; 
 
 // قنوات البلاغات
-const REPORT_LOG_CHANNEL_ID = "1515161056975126705"; // روم الأدمنز والمودز السرية لاستقبال البلاغات
+const REPORT_LOG_CHANNEL_ID = "1515161056975126705"; // روم الإدارة السرية لاستقبال البلاغات
 
 const BRAND_COLOR = "#FF750D"; 
 const BAN_TRACKER = new Set(); 
-const REPORT_COOLDOWN = new Map(); // حماية ضد السبام
+const REPORT_COOLDOWN = new Map(); // حماية ضد السبام (5 دقائق لكل مستخدم)
 
 // ================= [ Registration / تسجيل الأنظمة والأوامر ] =================
 
@@ -45,7 +45,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("setup-suggestion")
     .setDescription("Deploy the suggestion panel button (Admin Only)."),
-  // تم تحديث الاسم هنا إلى 🚨 REPORT TO 4KO
   new ContextMenuCommandBuilder()
     .setName("🚨 REPORT TO 4KO")
     .setType(ApplicationCommandType.User)
@@ -143,14 +142,13 @@ client.on("interactionCreate", async (interaction) => {
     } catch (error) { console.error(error); return interaction.reply({ content: "Failure posting suggestion.", ephemeral: true }); }
   }
 
-  // ---------------- [ SECTION 2: USER CONTEXT MENU REPORT ] ----------------
+  // ---------------- [ SECTION 2: USER CONTEXT MENU REPORT (الضغط المطول) ] ----------------
   
-  // استقبال وضغط الزر المحدث بالاسم الجديد
   if (interaction.isUserContextMenuCommand() && interaction.commandName === "🚨 REPORT TO 4KO") {
     const lastReport = REPORT_COOLDOWN.get(interaction.user.id);
     if (lastReport && (Date.now() - lastReport < 300000)) { 
       const timeLeft = Math.ceil((300000 - (Date.now() - lastReport)) / 1000);
-      return interaction.reply({ content: `⚠️ **Calm down! Please wait ${timeLeft} seconds before submitting another report.**`, ephemeral: true });
+      return interaction.reply({ content: `⚠️ **Please wait ${timeLeft} seconds before submitting another report.**`, ephemeral: true });
     }
 
     if (interaction.targetUser.id === interaction.user.id) {
@@ -191,21 +189,23 @@ client.on("interactionCreate", async (interaction) => {
     try {
       REPORT_COOLDOWN.set(interaction.user.id, Date.now()); 
 
+      // أولاً: تم تعديل هذه الصورة لتصبح الصورة الصحيحة التي طلبتها للادمنز عند وصول بلاغ جديد
       const reportEmbed = new EmbedBuilder()
         .setColor("#D92121")
-        .setAuthor({ name: `🚨 INCIDENT SYSTEM | CASE ID: #${Math.floor(10000 + Math.random() * 90000)}`, iconURL: interaction.guild.iconURL() })
-        .setTitle("⚠️ NEW RULE VIOLATION FILED")
+        .setAuthor({ name: `INCIDENT SYSTEM | CASE ID: #${Math.floor(10000 + Math.random() * 90000)}`, iconURL: interaction.guild.iconURL() })
+        .setTitle("NEW RULE VIOLATION FILED")
         .addFields(
           { name: "👤 | TARGET OFFENDER", value: `> ${targetUser} (ID: ${targetUserId})`, inline: false },
           { name: "📝 | REASON FOR FILED REPORT", value: `\`\`\`fix\n${reason}\n\`\`\``, inline: false },
           { name: "🖼️ | SUBMITTED EVIDENCE / METADATA", value: `\`\`\`yaml\n${evidence}\n\`\`\``, inline: false },
           { name: "🕵️‍♂️ | REPORT SUBMITTED BY", value: `> ${interaction.user} (ID: ${interaction.user.id})`, inline: true }
         )
-        .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154886041469008/Picsart_26-06-16_02-28-32-263.jpg?ex=6a354018&is=6a33ee98&hm=0be0e571c90ec7b47c203d8a83a11d3a493b88a3210c73229665c037b3160831&")
+        .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154886574280915/Picsart_26-06-16_01-44-54-864.jpg?ex=6a354018&is=6a33ee98&hm=696c86e053ba1c3d80dd4d86317b526e9a5b4add0e09d628b369dbe9ab159cec&")
         .setThumbnail(targetUser ? targetUser.displayAvatarURL({ dynamic: true }) : null)
         .setTimestamp()
-        .setFooter({ text: "YONKO TEAM • Anti-Cheat & Security", iconURL: interaction.guild.iconURL() });
+        .setFooter({ text: "4KO TEAM • Anti-Cheat & Security", iconURL: interaction.guild.iconURL() });
 
+      // ثانياً: إضافة إيموجي ❌ لزر الرفض كما طلبت
       const actionRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`report_accept_${interaction.user.id}`).setLabel("Accept Report").setStyle(ButtonStyle.Success).setEmoji("✅"),
         new ButtonBuilder().setCustomId(`report_reject_${interaction.user.id}`).setLabel("Reject Report").setStyle(ButtonStyle.Danger).setEmoji("❌"),
@@ -231,6 +231,7 @@ client.on("interactionCreate", async (interaction) => {
 
     const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
 
+    // ثالثاً: تغيير العناوين وتغيير الرسائل في الخاص لتكون بالإنجليزية بالكامل
     if (action === "accept") {
       originalEmbed.setColor("#2ecc71").addFields({ name: "⚡ ACTION LOGGED", value: `> Accepted by ${interaction.user}`, inline: true });
       await interaction.message.edit({ embeds: [originalEmbed], components: [] }); 
@@ -239,8 +240,8 @@ client.on("interactionCreate", async (interaction) => {
         try {
           const acceptEmbed = new EmbedBuilder()
             .setColor("#2ecc71")
-            .setTitle("⚜️ ─── YONKO SECURITY LOG ─── ⚜️")
-            .setDescription("أهلاً بك يا بطل،\n\nلقد تم مراجعة البلاغ الذي قدمته بنجاح وتبين صحة البيانات. نشكرك على وعيك وحرصك على أمان السيرفر، وتم اتخاذ الإجراءات والتدابير اللازمة فوراً ضد العضو المخالف.\n\nاستمر في دعم مجتمعنا! 🛡️")
+            .setTitle("4KO SECURITY SYSTEM")
+            .setDescription("Hello,\n\nYour recent user report has been thoroughly reviewed and approved by our moderation team. The provided evidence was validated, and appropriate disciplinary actions have been applied to the offender.\n\nThank you for keeping our community safe and clean!")
             .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154885513117918/Picsart_26-06-16_02-06-37-305.jpg?ex=6a354018&is=6a33ee98&hm=65126cf82239cd1a7c36117b147641c2b86f043226bd0d9b3dd5c26e4b109b34&")
             .setTimestamp();
           await reporter.send({ embeds: [acceptEmbed] });
@@ -257,9 +258,9 @@ client.on("interactionCreate", async (interaction) => {
         try {
           const rejectEmbed = new EmbedBuilder()
             .setColor("#e74c3c")
-            .setTitle("⚜️ ─── YONKO SECURITY LOG ─── ⚜️")
-            .setDescription("أهلاً بك،\n\nنود إعلامك بأنه بعد المراجعة الدقيقة والتحري حول البلاغ الذي تقدمت به، لم يتبين لنا وجود أدلة كافية أو واضحة تؤكد ارتكاب المخالفة المذكورة. بناءً على ذلك، تقرر رد هذا البلاغ وحفظه.\n\nنشكرك على تفهمك ومحاولتك المساعدة.")
-            .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154886574280915/Picsart_26-06-16_01-44-54-864.jpg?ex=6a354018&is=6a33ee98&hm=696c86e053ba1c3d80dd4d86317b526e9a5b4add0e09d628b369dbe9ab159cec&")
+            .setTitle("4KO SECURITY SYSTEM")
+            .setDescription("Hello,\n\nWe are contacting you to inform you that your recent user report has been reviewed and subsequently rejected. Following a careful inspection, our staff found insufficient or inconclusive evidence to verify the claimed rule violation.\n\nThank you for your understanding.")
+            .setImage("https://cdn.discordapp.com/attachments/1515530857010692320/1517154886041469008/Picsart_26-06-16_02-28-32-263.jpg?ex=6a354018&is=6a33ee98&hm=0be0e571c90ec7b47c203d8a83a11d3a493b88a3210c73229665c037b3160831&")
             .setTimestamp();
           await reporter.send({ embeds: [rejectEmbed] });
         } catch (e) { console.log(`Could not DM user ${reporterId} - DMs locked.`); }
@@ -276,4 +277,4 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 client.login(process.env.TOKEN);
-    
+        
