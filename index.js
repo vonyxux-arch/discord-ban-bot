@@ -22,6 +22,7 @@ const BAN_ROLE_ID = "1516616022352859278";
 const SUGGESTION_HUB_CHANNEL_ID = "1516999923470565516"; 
 const ADMIN_LOG_CHANNEL_ID = "1515161056975126705"; 
 const REPORT_LOG_CHANNEL_ID = "1515161056975126705"; 
+const ALLOWED_VOICE_CHANNEL_ID = "1517510114830192711"; // القناة المخصصة للبث
 const BRAND_COLOR = "#FF750D"; 
 const BAN_TRACKER = new Set(); 
 const REPORT_COOLDOWN = new Map(); 
@@ -47,6 +48,7 @@ client.once("ready", async () => {
 client.on("voiceStateUpdate", (oldState, newState) => {
   const connection = getVoiceConnection(oldState.guild.id);
   if (!connection) return;
+  // البوت يخرج إذا أصبح وحيداً في أي قناة
   const channel = oldState.guild.channels.cache.get(connection.joinConfig.channelId);
   if (channel && channel.members.size === 1) { connection.destroy(); }
 });
@@ -69,19 +71,20 @@ client.on("guildMemberUpdate", async (oldMember, newMember) => {
 });
 
 client.on("interactionCreate", async (interaction) => {
-  // أمر البث (مخصص للأدمن فقط)
   if (interaction.isChatInputCommand() && interaction.commandName === "play-live") {
     if (!interaction.member.permissions.has("Administrator")) {
       return interaction.reply({ content: "❌ هذا الأمر مخصص للأدمن فقط.", ephemeral: true });
     }
     const channel = interaction.member.voice.channel;
-    if (!channel) return interaction.reply({ content: "يجب أن تكون في قناة صوتية!", ephemeral: true });
+    if (!channel || channel.id !== ALLOWED_VOICE_CHANNEL_ID) {
+      return interaction.reply({ content: `❌ يجب أن تكون متواجداً داخل قناة [YONKO BROADCAST] لتشغيل البث!`, ephemeral: true });
+    }
     const connection = joinVoiceChannel({ channelId: channel.id, guildId: channel.guild.id, adapterCreator: channel.guild.voiceAdapterCreator });
     const player = createAudioPlayer();
     const resource = createAudioResource("https://www.youtube.com/live/bNyUyrR0PHo?si=YM9Guuo5BLYeAq9f");
     connection.subscribe(player);
     player.play(resource);
-    return interaction.reply({ content: "🔊 تم تشغيل بث الجزيرة.", ephemeral: true });
+    return interaction.reply({ content: "🔊 تم تشغيل بث الجزيرة في القناة المخصصة.", ephemeral: true });
   }
 
   if (interaction.isChatInputCommand() && interaction.commandName === "setup-suggestion") {
@@ -121,4 +124,4 @@ client.on("guildBanAdd", async (ban) => {
 });
 
 client.login(process.env.TOKEN);
-  
+                            
