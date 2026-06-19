@@ -34,7 +34,7 @@ GatewayIntentBits.GuildMembers,
 GatewayIntentBits.GuildMessages,
 GatewayIntentBits.MessageContent,
 GatewayIntentBits.GuildModeration,
-GatewayIntentBits.GuildVoiceStates // تم إضافة هذا الإنترنت لضمان عمل نظام تتبع الغرف الصوتية بدقة
+GatewayIntentBits.GuildVoiceStates
 ]
 });
 
@@ -63,7 +63,7 @@ new SlashCommandBuilder()
 .setName("setup-suggestion")
 .setDescription("Deploy the suggestion panel button (Admin Only)."),
 new ContextMenuCommandBuilder()
-.setName("🚨 إبلاغ عن مخالفة") // تحويل اسم قائمة الإبلاغ إلى العربية الاحترافية
+.setName("🚨 إبلاغ عن مخالفة")
 .setType(ApplicationCommandType.User)
 ].map(command => command.toJSON());
 
@@ -88,13 +88,11 @@ async function manageVoiceSystem() {
         const humanCount = channel.members.filter(m => !m.user.bot).size;
 
         if (humanCount === 0) {
-            // إذا لم يتواجد أي عضو حقيقي، يتم الاتصال وبدء العد التنازلي لـ 5 دقائق
             if (!voiceConnection) {
                 initiateVoiceConnection(channel);
             }
             startVoiceCountdown();
         } else {
-            // في حال وجود أعضاء، يتم إلغاء أي عد تنازلي وتأمين البث فوراً
             if (voiceTimeout) {
                 clearTimeout(voiceTimeout);
                 voiceTimeout = null;
@@ -119,7 +117,6 @@ function initiateVoiceConnection(channel) {
         audioPlayer = createAudioPlayer();
         voiceConnection.subscribe(audioPlayer);
 
-        // التعامل الآمن مع حالات انقطاع الاتصال المفاجئ
         voiceConnection.on('stateChange', (oldState, newState) => {
             if (newState.status === VoiceConnectionStatus.Disconnected) {
                 if (voiceConnection) voiceConnection.destroy();
@@ -189,10 +186,9 @@ function startVoiceCountdown() {
         }
         voiceTimeout = null;
         console.log("[VOICE TIMEOUT] Disconnected due to inactivity (No non-bot users).");
-    }, 300000); // 5 دقائق تماماً
+    }, 300000); // 5 دقائق
 }
 
-// تتبع تحديثات الغرفة الصوتية بشكل حي ومستمر
 client.on("voiceStateUpdate", async (oldState, newState) => {
     if (oldState.channelId === VOICE_CHANNEL_ID || newState.channelId === VOICE_CHANNEL_ID) {
         await manageVoiceSystem();
@@ -417,4 +413,5 @@ await ban.user.send({ embeds: [dmBanEmbed], files: [file] }).catch(() => {});
 } catch (error) { console.error(error); }
 });
 
-clien
+client.login(process.env.TOKEN);
+    
