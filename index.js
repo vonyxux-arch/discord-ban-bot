@@ -2,126 +2,113 @@ const {
   Client, GatewayIntentBits, EmbedBuilder, REST, Routes, 
   SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, 
-  TextInputBuilder, TextInputStyle, AuditLogEvent, AttachmentBuilder 
+  TextInputBuilder, TextInputStyle, AuditLogEvent, AttachmentBuilder,
+  StringSelectMenuBuilder, StringSelectMenuOptionBuilder 
 } = require("discord.js");
 
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, getVoiceConnection } = require("@discordjs/voice");
 
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildVoiceStates 
+    GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, 
+    GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, 
+    GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildVoiceStates 
   ]
 });
 
+// الثوابت (IDs)
 const BAN_ROLE_ID = "1516616022352859278"; 
 const SUGGESTION_HUB_CHANNEL_ID = "1516999923470565516"; 
 const ADMIN_LOG_CHANNEL_ID = "1515161056975126705"; 
-const REPORT_LOG_CHANNEL_ID = "1515161056975126705"; 
-const ALLOWED_VOICE_CHANNEL_ID = "1517510114830192711"; // القناة المخصصة للبث
+const ALLOWED_VOICE_CHANNEL_ID = "1517510114830192711";
 const BRAND_COLOR = "#FF750D"; 
-const BAN_TRACKER = new Set(); 
-const REPORT_COOLDOWN = new Map(); 
-
 const EXCLUDED_BOT_1_ID = "678344927997853742"; 
 const EXCLUDED_BOT_2_ID = "1516839005314875482"; 
 
+const channels = {
+  "aljazeera": { name: "الجزيرة", url: "https://www.youtube.com/live/bNyUyrR0PHo?si=YM9Guuo5BLYeAq9f" }
+};
+
 const commands = [
+  new SlashCommandBuilder().setName("play-live").setDescription("Start or manage live streams.").setDefaultMemberPermissions(0),
   new SlashCommandBuilder().setName("setup-suggestion").setDescription("Deploy the suggestion panel."),
-  new SlashCommandBuilder().setName("play-live").setDescription("Start Aljazeera live stream."),
   new ContextMenuCommandBuilder().setName("🚨 REPORT TO YONKO").setType(ApplicationCommandType.User)
 ].map(command => command.toJSON());
 
 client.once("ready", async () => {
-  console.log(`[SYSTEM ONLINE] ${client.user.tag}`);
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log("[PROTOCOL] Commands Synchronized.");
-  } catch (error) { console.error(error); }
+  await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+  console.log(`[SYSTEM ONLINE] ${client.user.tag}`);
 });
 
+// وظيفة خروج البوت التلقائي
 client.on("voiceStateUpdate", (oldState, newState) => {
   const connection = getVoiceConnection(oldState.guild.id);
-  if (!connection) return;
-  // البوت يخرج إذا أصبح وحيداً في أي قناة
-  const channel = oldState.guild.channels.cache.get(connection.joinConfig.channelId);
-  if (channel && channel.members.size === 1) { connection.destroy(); }
+  if (connection) {
+    const channel = oldState.guild.channels.cache.get(connection.joinConfig.channelId);
+    if (channel && channel.members.size === 1) connection.destroy();
+  }
 });
 
+// حماية الأعضاء (guildMemberUpdate)
 client.on("guildMemberUpdate", async (oldMember, newMember) => {
   if (!oldMember.roles.cache.has(BAN_ROLE_ID) && newMember.roles.cache.has(BAN_ROLE_ID)) {
-    BAN_TRACKER.add(newMember.id); 
     setTimeout(async () => {
-      try {
-        const member = await newMember.guild.members.fetch(newMember.id).catch(() => null);
-        if (member && member.roles.cache.has(BAN_ROLE_ID)) {
-          const finalBanEmbed = new EmbedBuilder().setColor(BRAND_COLOR).setTitle("🔨 Congratulations").setDescription("Your mute has been removed.\n\n🚫 **Permanently Banned.**\nWa 3awd sb lah wla di almoul7id 🧏🏻‍♂️.").setTimestamp();
-          await member.send({ embeds: [finalBanEmbed] }).catch(() => {});
-          await member.ban({ reason: "Security Enforcement." });
-          BAN_TRACKER.delete(newMember.id);
-        }
-      } catch (err) { console.error(err); }
+      const member = await newMember.guild.members.fetch(newMember.id).catch(() => null);
+      if (member && member.roles.cache.has(BAN_ROLE_ID)) {
+        await member.send({ content: "🚫 Banned." }).catch(() => {});
+        await member.ban({ reason: "Security Enforcement." });
+      }
     }, 30000);
   }
 });
 
 client.on("interactionCreate", async (interaction) => {
+  // 1. أمر التشغيل
   if (interaction.isChatInputCommand() && interaction.commandName === "play-live") {
-    if (!interaction.member.permissions.has("Administrator")) {
-      return interaction.reply({ content: "❌ هذا الأمر مخصص للأدمن فقط.", ephemeral: true });
-    }
-    const channel = interaction.member.voice.channel;
-    if (!channel || channel.id !== ALLOWED_VOICE_CHANNEL_ID) {
-      return interaction.reply({ content: `❌ يجب أن تكون متواجداً داخل قناة [YONKO BROADCAST] لتشغيل البث!`, ephemeral: true });
-    }
-    const connection = joinVoiceChannel({ channelId: channel.id, guildId: channel.guild.id, adapterCreator: channel.guild.voiceAdapterCreator });
-    const player = createAudioPlayer();
-    const resource = createAudioResource("https://www.youtube.com/live/bNyUyrR0PHo?si=YM9Guuo5BLYeAq9f");
-    connection.subscribe(player);
-    player.play(resource);
-    return interaction.reply({ content: "🔊 تم تشغيل بث الجزيرة في القناة المخصصة.", ephemeral: true });
+    const embed = new EmbedBuilder().setColor(BRAND_COLOR).setTitle("📺 YONKO LIVE CONTROL 📻").setDescription("استخدم القائمة والأزرار للتحكم.");
+    const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId("select_channel").setPlaceholder("اختر القناة").addOptions(new StringSelectMenuOptionBuilder().setLabel("الجزيرة").setValue("aljazeera")));
+    const btns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("btn_pause").setLabel("Pause").setStyle(ButtonStyle.Danger), new ButtonBuilder().setCustomId("btn_resume").setLabel("Resume").setStyle(ButtonStyle.Success));
+    return interaction.reply({ embeds: [embed], components: [row, btns] });
   }
 
+  // 2. التحكم بالبث
+  if (interaction.isStringSelectMenu() && interaction.customId === "select_channel") {
+    const channel = interaction.guild.channels.cache.get(ALLOWED_VOICE_CHANNEL_ID);
+    const connection = joinVoiceChannel({ channelId: channel.id, guildId: channel.guild.id, adapterCreator: channel.guild.voiceAdapterCreator });
+    const player = createAudioPlayer();
+    player.play(createAudioResource(channels[interaction.values[0]].url));
+    connection.subscribe(player);
+    return interaction.reply({ content: `🔊 تم تشغيل ${channels[interaction.values[0]].name} في YONKO LIVE 📻`, ephemeral: true });
+  }
+
+  if (interaction.isButton()) {
+    const connection = getVoiceConnection(interaction.guild.id);
+    if (connection) {
+      const player = connection.state.subscription.player;
+      if (interaction.customId === "btn_pause") player.pause();
+      if (interaction.customId === "btn_resume") player.unpause();
+      return interaction.reply({ content: "✅ تم التنفيذ.", ephemeral: true });
+    }
+  }
+
+  // 3. نظام الاقتراحات
   if (interaction.isChatInputCommand() && interaction.commandName === "setup-suggestion") {
-    if (!interaction.member.permissions.has("Administrator")) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
-    const hubChannel = interaction.guild.channels.cache.get(SUGGESTION_HUB_CHANNEL_ID);
-    if (!hubChannel) return interaction.reply({ content: "Error: Not found.", ephemeral: true });
-    const panelEmbed = new EmbedBuilder().setColor(BRAND_COLOR).setTitle("🔱 ─── SERVER SUGGESTION HUB ─── 🔱").setDescription("Click below to submit.").setTimestamp();
-    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("open_suggestion_modal").setLabel("Submit").setStyle(ButtonStyle.Primary).setEmoji("💡"));
-    await interaction.reply({ content: "✅ Panel deployed.", ephemeral: true });
-    return hubChannel.send({ embeds: [panelEmbed], components: [row] });
-  }
-  if (interaction.isButton() && interaction.customId === "open_suggestion_modal") {
-    const modal = new ModalBuilder().setCustomId("suggestion_modal").setTitle("Submit Suggestion");
-    modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("suggestion_input").setLabel("What is your suggestion?").setStyle(TextInputStyle.Paragraph).setRequired(true)));
-    return interaction.showModal(modal);
-  }
-  if (interaction.isModalSubmit() && interaction.customId === "suggestion_modal") {
-    const suggestionText = interaction.fields.getTextInputValue("suggestion_input");
-    const adminChannel = interaction.guild.channels.cache.get(ADMIN_LOG_CHANNEL_ID);
-    if (!adminChannel) return interaction.reply({ content: "Error: Log channel not found.", ephemeral: true });
-    const embed = new EmbedBuilder().setColor(BRAND_COLOR).setTitle("🔱 SUGGESTION 🔱").setDescription(`\`\`\`${suggestionText}\`\`\``).setTimestamp();
-    await adminChannel.send({ embeds: [embed] });
-    return interaction.reply({ content: "✅ Sent.", ephemeral: true });
+    const hub = interaction.guild.channels.cache.get(SUGGESTION_HUB_CHANNEL_ID);
+    const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("open_suggestion_modal").setLabel("Submit").setStyle(ButtonStyle.Primary));
+    await hub.send({ embeds: [new EmbedBuilder().setTitle("🔱 SUGGESTION HUB").setDescription("Click below.")], components: [row] });
+    return interaction.reply({ content: "✅ Done.", ephemeral: true });
   }
 });
 
+// حماية البان
 client.on("guildBanAdd", async (ban) => {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  try {
-    const fetchedLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.GuildBanAdd }).catch(() => null);
-    if (!fetchedLogs) return;
-    const banLog = fetchedLogs.entries.first();
-    if (!banLog || banLog.executor.id === EXCLUDED_BOT_1_ID || banLog.executor.id === EXCLUDED_BOT_2_ID) return;
+  const fetchedLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.GuildBanAdd }).catch(() => null);
+  const banLog = fetchedLogs?.entries.first();
+  if (banLog && ![EXCLUDED_BOT_1_ID, EXCLUDED_BOT_2_ID].includes(banLog.executor.id)) {
     const file = new AttachmentBuilder("./590606.jpg");
-    await ban.user.send({ embeds: [new EmbedBuilder().setTitle("🎮 WASTED").setImage("attachment://590606.jpg")], files: [file] }).catch(() => {});
-  } catch (error) { console.error(error); }
+    await ban.user.send({ files: [file] }).catch(() => {});
+  }
 });
 
 client.login(process.env.TOKEN);
-                            
